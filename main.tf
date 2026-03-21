@@ -16,12 +16,32 @@ resource "aws_vpc" "main_vpc" {
   }
 }
 
+	#Key-pairs
+		# private key
+resource "tls_private_key" "main_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+		# 2.public key for AWS
+resource "aws_key_pair" "deployer_key" {
+  key_name   = "devops-project-key"
+  public_key = tls_private_key.main_key.public_key_openssh
+}
+
+		# 3.local file 
+resource "local_file" "ssh_key" {
+  content  = tls_private_key.main_key.private_key_pem
+  filename = "${path.module}/devops-project-key.pem"
+}
+
 	#Subnet ID's / tags
 
 resource "aws_subnet" "public_subnet_1" {
   vpc_id     = aws_vpc.main_vpc.id
   cidr_block = "10.0.1.0/24"
   availability_zone = "us-east-1b"
+  map_public_ip_on_launch = true
   
   tags = {
     Name = "Public-Subnet-1"
@@ -32,6 +52,7 @@ resource "aws_subnet" "public_subnet_2" {
   vpc_id     = aws_vpc.main_vpc.id
   cidr_block = "10.0.2.0/24"
   availability_zone = "us-east-1b"
+  map_public_ip_on_launch = true
   
   tags = {
     Name = "Public-Subnet-2"
@@ -133,6 +154,8 @@ resource "aws_instance" "bastion" {
   instance_type = "c7i-flex.large"
   subnet_id     = aws_subnet.public_subnet_1.id
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
+  associate_public_ip_address = true
+  key_name = aws_key_pair.deployer_key.key_name
   
   tags = {
     Name = "Bastion-Host"
@@ -165,6 +188,7 @@ resource "aws_instance" "jenkins" {
   instance_type = "c7i-flex.large" # hopefully no slow jenkins?
   subnet_id              = aws_subnet.private_subnet_1.id
   vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
+  key_name = aws_key_pair.deployer_key.key_name
   
   tags = {
     Name = "Jenkins-Server"
@@ -204,7 +228,8 @@ resource "aws_instance" "sonarqube" {
   instance_type          = "c7i-flex.large" 
   subnet_id              = aws_subnet.private_subnet_2.id
   vpc_security_group_ids = [aws_security_group.sonarqube_sg.id]
-
+  key_name = aws_key_pair.deployer_key.key_name
+  
   tags = {
     Name = "SonarQube-Server"
   }
