@@ -159,7 +159,8 @@ resource "aws_security_group" "bastion_sg" {
 resource "aws_instance" "jenkins" {
   ami           = "ami-0c7217cdde317cfec"
   instance_type = "t2.medium" # hopefully no slow jenkins?
-  subnet_id     = 
+  subnet_id              = aws_subnet.private_subnet_1.id
+  vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
   
   tags = {
     Name = "Jenkins-Server"
