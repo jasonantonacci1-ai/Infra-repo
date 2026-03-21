@@ -126,7 +126,7 @@ resource "aws_route_table_association" "private_rta_2" {
 
 resource "aws_instance" "bastion" {
   ami           = "ami-0c7217cdde317cfec" # standard Ubuntu image for us-east-1
-  instance_type = "t2.micro"
+  instance_type = "c7i-flex.large"
   subnet_id     = aws_subnet.public_subnet_1.id
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   
@@ -158,7 +158,7 @@ resource "aws_security_group" "bastion_sg" {
 
 resource "aws_instance" "jenkins" {
   ami           = "ami-0c7217cdde317cfec"
-  instance_type = "t2.medium" # hopefully no slow jenkins?
+  instance_type = "c7i-flex.large" # hopefully no slow jenkins?
   subnet_id              = aws_subnet.private_subnet_1.id
   vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
   
@@ -197,7 +197,7 @@ resource "aws_security_group" "jenkins_sg" {
 
 resource "aws_instance" "sonarqube" {
   ami                    = "ami-0c7217cdde317cfec"
-  instance_type          = "t2.medium" 
+  instance_type          = "c7i-flex.large" 
   subnet_id              = aws_subnet.private_subnet_2.id
   vpc_security_group_ids = [aws_security_group.sonarqube_sg.id]
 
