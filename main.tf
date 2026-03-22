@@ -33,6 +33,21 @@ resource "aws_key_pair" "deployer_key" {
 resource "local_file" "ssh_key" {
   content  = tls_private_key.main_key.private_key_pem
   filename = "${path.module}/devops-project-key.pem"
+
+provisioner "local-exec" {
+    command = "chmod 400 ${path.module}/devops-project-key.pem"
+	}
+}
+	#grabs IP's
+resource "local_file" "ansible_inventory" {
+  content = <<-EOT
+    [jenkins]
+    ${aws_instance.jenkins.private_ip}
+
+    [sonarqube]
+    ${aws_instance.sonarqube.private_ip}
+  EOT
+  filename = "${path.module}/ansible/inventory"
 }
 
 	#Subnet ID's / tags
@@ -262,3 +277,5 @@ resource "aws_security_group" "sonarqube_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+

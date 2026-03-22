@@ -1,0 +1,10 @@
+#local keys
+*.pem
+
+#Terraform files to ignore
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+#ansible auto-generated files to ignore
+ansible/inventory
