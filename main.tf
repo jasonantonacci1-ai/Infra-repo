@@ -277,5 +277,20 @@ resource "aws_security_group" "sonarqube_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+#Terraform IP instructions
 
+resource "local_file" "ansible_config" {
+  content = <<-EOT
+    [defaults]
+    inventory = inventory
+    host_key_checking = False
+    remote_user = ubuntu
+    private_key_file = ../devops-project-key.pem
+    
+    [ssh_connection]
+    ssh_args = -o ProxyCommand="ssh -W %h:%p -q -i ../devops-project-key.pem ubuntu@${aws_instance.bastion.public_ip}"
+  EOT
+  
+  filename = "${path.module}/ansible/ansible.cfg"
+}
 

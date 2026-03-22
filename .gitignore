@@ -8,3 +8,5 @@
 
 #ansible auto-generated files to ignore
 ansible/inventory
+ansible/ansible.cfg
+
