@@ -1,4 +1,4 @@
-#AWS infrastructure
+#AWS infrastructure --------------------------------------------------
 
 provider "aws" {
   region = "us-east-1"
@@ -16,20 +16,20 @@ resource "aws_vpc" "main_vpc" {
   }
 }
 
-	#Key-pairs
-		# private key
+#Key-pairs --------------------------------------------------
+                # private key
 resource "tls_private_key" "main_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-		# 2.public key for AWS
+                # 2.public key for AWS
 resource "aws_key_pair" "deployer_key" {
   key_name   = "devops-project-key"
   public_key = tls_private_key.main_key.public_key_openssh
 }
 
-		# 3.local file 
+                # 3.local file 
 resource "local_file" "ssh_key" {
   content  = tls_private_key.main_key.private_key_pem
   filename = "${path.module}/devops-project-key.pem"
@@ -38,7 +38,8 @@ provisioner "local-exec" {
     command = "chmod 400 ${path.module}/devops-project-key.pem"
 	}
 }
-	#grabs IP's
+# Local File stuff --------------------------------------------------
+        #grabs IP's
 resource "local_file" "ansible_inventory" {
   content = <<-EOT
     [jenkins]
@@ -49,8 +50,30 @@ resource "local_file" "ansible_inventory" {
   EOT
   filename = "${path.module}/ansible/inventory"
 }
+         #tunnels
+resource "local_file" "sonarqube_tunnel" {
+  content = <<-EOT
+    ssh -i "${path.module}/devops-project-key.pem" -L 9000:${aws_instance.sonarqube.private_ip}:9000 ubuntu@${aws_instance.bastion.public_ip}
+  EOT
+  filename = "${path.module}/ansible/connect-sonarqube.sh"
+  
+  provisioner "local-exec" {
+    command = "chmod +x ${path.module}/ansible/connect-sonarqube.sh"
+  }
+}
 
-	#Subnet ID's / tags
+resource "local_file" "jenkins_tunnel" {
+  content = <<-EOT
+    ssh -i "${path.module}/devops-project-key.pem" -L 8080:${aws_instance.jenkins.private_ip}:8080 ubuntu@${aws_instance.bastion.public_ip}
+  EOT
+  filename = "${path.module}/ansible/connect-jenkins.sh"
+  
+    provisioner "local-exec" {
+    command = "chmod +x ${path.module}/ansible/connect-jenkins.sh"
+  }
+}
+
+#Subnet ID's / tags --------------------------------------------------
 
 resource "aws_subnet" "public_subnet_1" {
   vpc_id     = aws_vpc.main_vpc.id
@@ -94,7 +117,7 @@ resource "aws_subnet" "private_subnet_2" {
   }
 }
 
-	# Routing / Gateways
+# Routing / Gateways --------------------------------------------------
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main_vpc.id
 
@@ -162,7 +185,7 @@ resource "aws_route_table_association" "private_rta_2" {
   route_table_id = aws_route_table.private_rt.id
 }
 
-# bastion infrastructure
+# bastion infrastructure --------------------------------------------------
 
 resource "aws_instance" "bastion" {
   ami           = "ami-0c7217cdde317cfec" # standard Ubuntu image for us-east-1
@@ -196,7 +219,7 @@ resource "aws_security_group" "bastion_sg" {
   }
 }
 
-#Jenkins Infrastructure
+#Jenkins Infrastructure --------------------------------------------------
 
 resource "aws_instance" "jenkins" {
   ami           = "ami-0c7217cdde317cfec"
@@ -213,6 +236,15 @@ resource "aws_instance" "jenkins" {
 resource "aws_security_group" "jenkins_sg" {
   name   = "jenkins-sg"
   vpc_id = aws_vpc.main_vpc.id
+
+#entryway test
+
+#ingress {
+#    from_port   = 22
+#    to_port     = 22
+#    protocol    = "tcp"
+#    cidr_blocks = ["10.0.0.0/16"] # Allow the whole VPC for a moment
+#  }
 
   ingress {
     from_port       = 22
@@ -236,7 +268,9 @@ resource "aws_security_group" "jenkins_sg" {
   }
 }
 
-#SonarQube Infrastructure
+
+
+#SonarQube Infrastructure --------------------------------------------------
 
 resource "aws_instance" "sonarqube" {
   ami                    = "ami-0c7217cdde317cfec"
@@ -262,7 +296,7 @@ resource "aws_security_group" "sonarqube_sg" {
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
-  # SonarQube UI/API access from Jenkins
+  # SonarQube UI/API access from Jenkins 
   ingress {
     from_port       = 9000
     to_port         = 9000
@@ -277,7 +311,7 @@ resource "aws_security_group" "sonarqube_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
-#Terraform IP instructions
+#Terraform IP instructions --------------------------------------------------
 
 resource "local_file" "ansible_config" {
   content = <<-EOT
@@ -293,4 +327,6 @@ resource "local_file" "ansible_config" {
   
   filename = "${path.module}/ansible/ansible.cfg"
 }
+
+
 

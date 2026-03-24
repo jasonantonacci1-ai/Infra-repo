@@ -5,8 +5,14 @@
 .terraform/
 *.tfstate
 *.tfstate.backup
+.terraform.lock.hcl
+
 
 #ansible auto-generated files to ignore
 ansible/inventory
 ansible/ansible.cfg
+ansible/connect-*.sh
+
+#OS files to ignore
+.DS_Store
 
