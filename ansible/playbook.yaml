@@ -56,11 +56,32 @@
       loop:
         - /home/ubuntu/jenkins_data
         - /home/ubuntu/sonar_data
+        - /home/ubuntu/jenkins_data/init.groovy.d/
     - name: Start and enable Docker
       service:
         name: docker
         state: started
         enabled: yes
+    - name: Create Jenkins Admin User Script
+      ansible.builtin.copy:
+        dest: /home/ubuntu/jenkins_data/init.groovy.d/basic-security.groovy
+        content: |
+           import jenkins.model.*
+           import hudson.security.*
+
+           def instance = Jenkins.getInstance()
+
+           def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+           hudsonRealm.createAccount("admin", "admin")
+           instance.setSecurityRealm(hudsonRealm)
+
+           def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+           instance.setAuthorizationStrategy(strategy)
+
+           instance.save()
+        owner: "1000"
+        group: "1000"
+        mode: "0644"
     - name: Start Jenkins container
       community.docker.docker_container:
         name: jenkins
@@ -69,6 +90,8 @@
           - "8080:8080"
         volumes:
           - "/home/ubuntu/jenkins_data:/var/jenkins_home"
+        env:
+          JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
         state: started
     - name: Start SonarQube container
       community.docker.docker_container:

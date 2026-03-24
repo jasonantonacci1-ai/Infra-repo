@@ -239,22 +239,21 @@ resource "aws_security_group" "jenkins_sg" {
 
 #entryway test
 
-#ingress {
-#    from_port   = 22
-#    to_port     = 22
-#    protocol    = "tcp"
-#    cidr_blocks = ["10.0.0.0/16"] # Allow the whole VPC for a moment
-#  }
-
+ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["${aws_instance.bastion.private_ip}/32"]
+}
   ingress {
     from_port       = 22
-    to_port         = 22
+    to_port         = 22    #for internal to internal moves
     protocol        = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
   }
   
   ingress {
-    from_port   = 8080   # We'll likely need port 8080 later for the Jenkins
+    from_port   = 8080   # jenkins default port
     to_port     = 8080
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/16"] # Allow internal VPC traffic to see the UI
