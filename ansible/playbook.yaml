@@ -46,7 +46,17 @@
         name: ubuntu
         groups: docker
         append: yes
-    - name: Create data directories with correct permissions
+    - name: Start and enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+        
+- name: Configure Jenkins Server
+  hosts: jenkins
+  become: yes
+  tasks:
+    - name: Create Jenkins data directories with correct permissions
       file:
         path: "{{ item }}"
         state: directory
@@ -55,13 +65,7 @@
         mode: "0755"
       loop:
         - /home/ubuntu/jenkins_data
-        - /home/ubuntu/sonar_data
         - /home/ubuntu/jenkins_data/init.groovy.d/
-    - name: Start and enable Docker
-      service:
-        name: docker
-        state: started
-        enabled: yes
     - name: Create Jenkins Admin User Script
       ansible.builtin.copy:
         dest: /home/ubuntu/jenkins_data/init.groovy.d/basic-security.groovy
@@ -93,6 +97,20 @@
         env:
           JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
         state: started
+        
+- name: Configure SonarQube Server
+  hosts: sonarqube
+  become: yes
+  tasks:
+    - name: Create Sonarqube data directories with correct permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      loop:
+        - /home/ubuntu/sonar_data
     - name: Start SonarQube container
       community.docker.docker_container:
         name: sonarqube
@@ -102,5 +120,4 @@
         volumes:
           - "/home/ubuntu/sonar_data:/opt/sonarqube/data"
         state: started
-
     

@@ -227,7 +227,11 @@ resource "aws_instance" "jenkins" {
   subnet_id              = aws_subnet.private_subnet_1.id
   vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
   key_name = aws_key_pair.deployer_key.key_name
-  
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    delete_on_termination = true # This is the "nuke" switch
+  }
   tags = {
     Name = "Jenkins-Server"
   }
@@ -277,7 +281,11 @@ resource "aws_instance" "sonarqube" {
   subnet_id              = aws_subnet.private_subnet_2.id
   vpc_security_group_ids = [aws_security_group.sonarqube_sg.id]
   key_name = aws_key_pair.deployer_key.key_name
-  
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    delete_on_termination = true # This is the "nuke" switch
+  }
   tags = {
     Name = "SonarQube-Server"
   }
@@ -321,11 +329,8 @@ resource "local_file" "ansible_config" {
     private_key_file = ../devops-project-key.pem
     
     [ssh_connection]
-    ssh_args = -o ProxyCommand="ssh -W %h:%p -q -i ../devops-project-key.pem ubuntu@${aws_instance.bastion.public_ip}"
+    ssh_args = -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -W %h:%p -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ../devops-project-key.pem ubuntu@${aws_instance.bastion.public_ip}"
   EOT
   
   filename = "${path.module}/ansible/ansible.cfg"
 }
-
-
-
