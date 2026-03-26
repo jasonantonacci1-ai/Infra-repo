@@ -97,7 +97,9 @@
         env:
           JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
         state: started
-        
+    - name: Install Jenkins plugins and restart
+      shell: docker exec jenkins jenkins-plugin-cli --plugins credentials && docker restart jenkins
+            
 - name: Configure SonarQube Server
   hosts: sonarqube
   become: yes
@@ -120,4 +122,26 @@
         volumes:
           - "/home/ubuntu/sonar_data:/opt/sonarqube/data"
         state: started
+    - name: Wait for SonarQube to be ready (this can take 2-3 minutes)
+      uri:
+        url: http://localhost:9000/api/system/status
+        method: GET
+      register: _result
+      until: "_result.status == 200 and _result.json.status == 'UP'"
+      retries: 30
+      delay: 10
+    - name: Change default admin password
+      uri:
+        url: http://localhost:9000/api/users/change_password
+        method: POST
+        user: admin
+        password: admin
+        force_basic_auth: yes
+        body_format: form-urlencoded
+        body:
+          login: admin
+          previousPassword: admin
+          password: "YourNewSecurePassword123!"
+        status_code: 204
+      ignore_errors: yes #ignores admin password reset error
     

@@ -303,12 +303,12 @@ resource "aws_security_group" "sonarqube_sg" {
     security_groups = [aws_security_group.bastion_sg.id]
   }
 
-  # SonarQube UI/API access from Jenkins 
+  # SonarQube UI/API access from Jenkins AND Bastion (for the tunnel)
   ingress {
     from_port       = 9000
     to_port         = 9000
     protocol        = "tcp"
-    security_groups = [aws_security_group.jenkins_sg.id]
+    security_groups = [aws_security_group.jenkins_sg.id, aws_security_group.bastion_sg.id]
   }
 
   egress {
