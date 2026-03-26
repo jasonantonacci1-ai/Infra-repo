@@ -51,7 +51,7 @@
         name: docker
         state: started
         enabled: yes
-        
+#Jenkins Docker Container        
 - name: Configure Jenkins Server
   hosts: jenkins
   become: yes
@@ -98,8 +98,8 @@
           JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
         state: started
     - name: Install Jenkins plugins and restart
-      shell: docker exec jenkins jenkins-plugin-cli --plugins credentials && docker restart jenkins
-            
+      shell: docker exec jenkins jenkins-plugin-cli --plugins credentials --pluigins plain-credentials && docker restart jenkins
+#SonarQube Docker Container---------------------------------------------------------            
 - name: Configure SonarQube Server
   hosts: sonarqube
   become: yes
