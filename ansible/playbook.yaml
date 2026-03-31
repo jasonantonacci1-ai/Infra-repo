@@ -98,7 +98,7 @@
           JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
         state: started
     - name: Install Jenkins plugins and restart
-      shell: docker exec jenkins jenkins-plugin-cli --plugins credentials plain-credentials && docker restart jenkins
+      shell: docker exec jenkins jenkins-plugin-cli --plugins credentials plain-credentials sonar && docker restart jenkins
 #SonarQube Docker Container---------------------------------------------------------            
 - name: Configure SonarQube Server
   hosts: sonarqube
@@ -113,15 +113,12 @@
         mode: "0755"
       loop:
         - /home/ubuntu/sonar_data
-    - name: Start SonarQube container
-      community.docker.docker_container:
-        name: sonarqube
-        image: sonarqube:lts
-        ports:
-          - "9000:9000"
-        volumes:
-          - "/home/ubuntu/sonar_data:/opt/sonarqube/data"
-        state: started
+    - name: Copy docker-compose.yml to SonarQube host
+      copy:
+        src: ./docker-compose.yml
+        dest: /home/ubuntu/docker-compose.yml
+    - name: Run SonarQube with Docker Compose
+      shell: docker compose -f /home/ubuntu/docker-compose.yml up -d
     - name: Wait for SonarQube to be ready (this can take 2-3 minutes)
       uri:
         url: http://localhost:9000/api/system/status
