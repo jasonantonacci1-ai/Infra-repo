@@ -72,6 +72,7 @@ resource "local_file" "jenkins_tunnel" {
     command = "chmod +x ${path.module}/ansible/connect-jenkins.sh"
   }
 }
+#password generation ---------------------------------------------------------
          #ansible password generation (jenkins)
 resource "random_password" "jenkins_pass" {
   length           = 16
@@ -87,7 +88,7 @@ resource "random_password" "sonarqube_pass" {
           #places password into secret file
 resource "local_file" "ansible_secrets" {
   filename = "${path.module}/ansible/secrets.yml"
-  content  = "sonarqube_admin_password: ${random_password.sonarqube_pass.result}\njenkins_admin_password: ${random_password.jenkins_pass.result}"
+  content  = "sonarqube_admin_password: \"${random_password.sonarqube_pass.result}\"\njenkins_admin_password: \"${random_password.jenkins_pass.result}\""
 }
 
 resource "null_resource" "encrypt_secrets" {
