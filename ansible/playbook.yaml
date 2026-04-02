@@ -55,6 +55,8 @@
 - name: Configure Jenkins Server
   hosts: jenkins
   become: yes
+  vars_files:
+    - secrets.yml
   tasks:
     - name: Create Jenkins data directories with correct permissions
       file:
@@ -76,7 +78,7 @@
            def instance = Jenkins.getInstance()
 
            def hudsonRealm = new HudsonPrivateSecurityRealm(false)
-           hudsonRealm.createAccount("admin", "admin")
+           hudsonRealm.createAccount("admin", "{{jenkins_admin_password}}")
            instance.setSecurityRealm(hudsonRealm)
 
            def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
@@ -103,6 +105,8 @@
 - name: Configure SonarQube Server
   hosts: sonarqube
   become: yes
+  vars_files:
+    - secrets.yml
   tasks:
     - name: Create Sonarqube data directories with correct permissions
       file:
@@ -138,7 +142,19 @@
         body:
           login: admin
           previousPassword: admin
-          password: "YourNewSecurePassword123!"
+          password: "{{sonarqube_admin_password}}"
         status_code: 204
       ignore_errors: yes #ignores admin password reset error
-    
+    - name: Generate SonarQube Analysis Token
+      uri:
+        url: "http://localhost:9000/api/user_tokens/generate?name=jenkins-token"
+        method: POST
+        user: admin
+        password: "{{sonarqube_admin_password}}"
+        force_basic_auth: yes
+        status_code: 200
+      register: sonarqube_token_response
+      ignore_errors: yes
+    - name: Print the SonarQube Token
+      debug:
+        msg: "The new token is: {{ sonarqube_token_response.json.token }}"

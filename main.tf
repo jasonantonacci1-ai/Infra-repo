@@ -61,7 +61,7 @@ resource "local_file" "sonarqube_tunnel" {
     command = "chmod +x ${path.module}/ansible/connect-sonarqube.sh"
   }
 }
-
+         #keys .pem files
 resource "local_file" "jenkins_tunnel" {
   content = <<-EOT
     ssh -i "${path.module}/devops-project-key.pem" -L 8080:${aws_instance.jenkins.private_ip}:8080 ubuntu@${aws_instance.bastion.public_ip}
@@ -72,7 +72,30 @@ resource "local_file" "jenkins_tunnel" {
     command = "chmod +x ${path.module}/ansible/connect-jenkins.sh"
   }
 }
+         #ansible password generation (jenkins)
+resource "random_password" "jenkins_pass" {
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+          #ansible password generation (sonarqube)
+resource "random_password" "sonarqube_pass" {
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+          #places password into secret file
+resource "local_file" "ansible_secrets" {
+  filename = "${path.module}/ansible/secrets.yml"
+  content  = "sonarqube_admin_password: ${random_password.sonarqube_pass.result}\njenkins_admin_password: ${random_password.jenkins_pass.result}"
+}
 
+resource "null_resource" "encrypt_secrets" {
+  depends_on = [local_file.ansible_secrets]
+  provisioner "local-exec" {
+    command = "echo '${random_password.sonarqube_pass.result}' > vault_pass.txt && ansible-vault encrypt ansible/secrets.yml --vault-password-file vault_pass.txt"
+  }
+}
 #Subnet ID's / tags --------------------------------------------------
 
 resource "aws_subnet" "public_subnet_1" {
