@@ -12,6 +12,7 @@
 ansible/inventory
 ansible/ansible.cfg
 ansible/connect-*.sh
+ansible/secrets.yml
 vault_pass.txt
 
 #OS files to ignore
