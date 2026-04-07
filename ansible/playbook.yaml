@@ -20,6 +20,9 @@
           - ca-certificates
           - curl
           - software-properties-common
+          - fontconfig
+          - openjdk-17-jre
+          - unzip
         state: present
     - name: Add Docker GPG apt Key
       apt_key:
@@ -51,26 +54,52 @@
         name: docker
         state: started
         enabled: yes
-#Jenkins Docker Container        
+#Jenkins --------------------------------------------------        
 - name: Configure Jenkins Server
   hosts: jenkins
   become: yes
   vars_files:
     - secrets.yml
   tasks:
+    - name: Download Jenkins GPG key
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+        mode: '0644'
+    - name: Add Jenkins Repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+    - name: Add Jenkins to docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+    - name: Start and enable Jenkins
+      service:
+        name: jenkins
+        state: started
+        enabled: yes
     - name: Create Jenkins data directories with correct permissions
       file:
         path: "{{ item }}"
         state: directory
-        owner: "1000"
-        group: "1000"
+        owner: jenkins
+        group: jenkins
         mode: "0755"
       loop:
-        - /home/ubuntu/jenkins_data
-        - /home/ubuntu/jenkins_data/init.groovy.d/
+        - /var/lib/jenkins
+        - /var/lib/jenkins/init.groovy.d/
     - name: Create Jenkins Admin User Script
       ansible.builtin.copy:
-        dest: /home/ubuntu/jenkins_data/init.groovy.d/basic-security.groovy
+        dest: /var/lib/jenkins/init.groovy.d/basic-security.groovy
         content: |
            import jenkins.model.*
            import hudson.security.*
@@ -85,22 +114,16 @@
            instance.setAuthorizationStrategy(strategy)
 
            instance.save()
-        owner: "1000"
-        group: "1000"
+        owner: jenkins
+        group: jenkins
         mode: "0644"
-    - name: Start Jenkins container
-      community.docker.docker_container:
-        name: jenkins
-        image: jenkins/jenkins:lts
-        ports:
-          - "8080:8080"
-        volumes:
-          - "/home/ubuntu/jenkins_data:/var/jenkins_home"
-        env:
-          JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
-        state: started
-    - name: Install Jenkins plugins and restart
-      shell: docker exec jenkins jenkins-plugin-cli --plugins credentials plain-credentials sonar && docker restart jenkins
+    - name: Install Sonar Scanner
+      unarchive:
+        src: "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip"
+        dest: "/opt/"
+        remote_src: yes
+        owner: jenkins
+        group: jenkins
 #SonarQube Docker Container---------------------------------------------------------            
 - name: Configure SonarQube Server
   hosts: sonarqube
