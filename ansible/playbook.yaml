@@ -103,9 +103,12 @@
         content: |
            import jenkins.model.*
            import hudson.security.*
+           import jenkins.install.InstallState
+           import jenkins.model.JenkinsLocationConfiguration
 
            def instance = Jenkins.getInstance()
 
+           // 1. Create the Admin User
            def hudsonRealm = new HudsonPrivateSecurityRealm(false)
            hudsonRealm.createAccount("admin", "{{jenkins_admin_password}}")
            instance.setSecurityRealm(hudsonRealm)
@@ -113,6 +116,13 @@
            def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
            instance.setAuthorizationStrategy(strategy)
 
+           // 2. Set the Jenkins URL so CLI works
+           def locationConfig = JenkinsLocationConfiguration.get()
+           locationConfig.setUrl("http://localhost:8080/")
+           locationConfig.save()
+
+           // 3. Bypass Setup Wizard
+           instance.setInstallState(InstallState.INITIAL_SETUP_COMPLETED)
            instance.save()
         owner: jenkins
         group: jenkins
@@ -124,6 +134,28 @@
         remote_src: yes
         owner: jenkins
         group: jenkins
+    - name: Restart Jenkins to apply init scripts
+      service:
+        name: jenkins
+        state: restarted
+    - name: Wait for Jenkins to come back online
+      uri:
+        url: http://localhost:8080/login
+        method: GET
+      register: _result
+      until: "_result.status == 200"
+      retries: 30
+      delay: 5
+    - name: FETCH Jenkins CLI tool
+      get_url:
+        url: http://localhost:8080/jnlpJars/jenkins-cli.jar
+        dest: /opt/jenkins-cli.jar
+        mode: '0644'
+
+    - name: Install Jenkins Plugins via CLI
+      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:"{{jenkins_admin_password}}" install-plugin git workflow-aggregator sonar
+    - name: Safe restart Jenkins to load plugins
+      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:"{{jenkins_admin_password}}" safe-restart
 #SonarQube Docker Container---------------------------------------------------------            
 - name: Configure SonarQube Server
   hosts: sonarqube
