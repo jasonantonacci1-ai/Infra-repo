@@ -1,0 +1,2 @@
+# Rename this file to terraform.tfvars and enter your own credentials before running
+email_app_password = "ENTER_YOUR_16_DIGIT_APP_PASSWORD_HERE"
