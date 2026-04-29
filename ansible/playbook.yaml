@@ -21,7 +21,7 @@
           - curl
           - software-properties-common
           - fontconfig
-          - openjdk-17-jre
+          - openjdk-21-jre
           - unzip
         state: present
     - name: Add Docker GPG apt Key
@@ -54,7 +54,7 @@
         name: docker
         state: started
         enabled: yes
-#Jenkins --------------------------------------------------        
+#Jenkins native installation--------------------------------------------------        
 - name: Configure Jenkins Server
   hosts: jenkins
   become: yes
@@ -110,7 +110,7 @@
 
            // 1. Create the Admin User
            def hudsonRealm = new HudsonPrivateSecurityRealm(false)
-           hudsonRealm.createAccount("admin", "{{jenkins_admin_password}}")
+           hudsonRealm.createAccount("admin", '{{jenkins_admin_password}}')
            instance.setSecurityRealm(hudsonRealm)
 
            def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
@@ -134,6 +134,20 @@
         remote_src: yes
         owner: jenkins
         group: jenkins
+    - name: Download Trivy GPG key
+      get_url:
+        url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+        dest: /usr/share/keyrings/trivy.asc
+        mode: '0644'
+    - name: Add Trivy Repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/trivy.asc] https://aquasecurity.github.io/trivy-repo/deb {{ ansible_lsb.codename }} main"
+        state: present
+    - name: Install Trivy
+      apt:
+        name: trivy
+        state: present
+        update_cache: yes
     - name: Restart Jenkins to apply init scripts
       service:
         name: jenkins
@@ -153,9 +167,23 @@
         mode: '0644'
 
     - name: Install Jenkins Plugins via CLI
-      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:"{{jenkins_admin_password}}" install-plugin git workflow-aggregator sonar
+      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:'{{jenkins_admin_password}}' install-plugin git workflow-aggregator sonar configuration-as-code mailer
+    - name: Create JCasC configuration file
+      copy:
+        dest: "/var/lib/jenkins/jenkins.yaml"
+        content: |
+          unclassified:
+            mailer:
+              smtpHost: "smtp.gmail.com"
+              smtpPort: "465"
+              useSsl: true
+              authentication:
+                username: "jasonantonacci2@gmail.com"
+                password: "{{ email_app_password }}"
+        owner: jenkins
+        group: jenkins
     - name: Safe restart Jenkins to load plugins
-      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:"{{jenkins_admin_password}}" safe-restart
+      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:'{{jenkins_admin_password}}' safe-restart
 #SonarQube Docker Container---------------------------------------------------------            
 - name: Configure SonarQube Server
   hosts: sonarqube

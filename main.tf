@@ -16,6 +16,14 @@ resource "aws_vpc" "main_vpc" {
   }
 }
 
+#password pulls from outside terraform-----------------------
+
+variable "email_app_password" {
+  description = "The 16-digit Gmail App Password for Jenkins"
+  type        = string
+  sensitive   = true
+}
+
 #Key-pairs --------------------------------------------------
                 # private key
 resource "tls_private_key" "main_key" {
@@ -85,10 +93,15 @@ resource "random_password" "sonarqube_pass" {
   special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
-          #places password into secret file
+          #places password into secret file (original without email password)
+#resource "local_file" "ansible_secrets" {
+ # filename = "${path.module}/ansible/secrets.yml"
+ # content  = "sonarqube_admin_password: \"${random_password.sonarqube_pass.result}\"\njenkins_admin_password: \"${random_password.jenkins_pass.result}\""
+#}
+
 resource "local_file" "ansible_secrets" {
   filename = "${path.module}/ansible/secrets.yml"
-  content  = "sonarqube_admin_password: \"${random_password.sonarqube_pass.result}\"\njenkins_admin_password: \"${random_password.jenkins_pass.result}\""
+  content  = "sonarqube_admin_password: \"${random_password.sonarqube_pass.result}\"\njenkins_admin_password: \"${random_password.jenkins_pass.result}\"\nemail_app_password: \"${var.email_app_password}\""
 }
 
 resource "null_resource" "encrypt_secrets" {

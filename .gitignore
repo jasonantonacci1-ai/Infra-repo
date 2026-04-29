@@ -6,7 +6,7 @@
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
-
+terraform.tfvars
 
 #ansible auto-generated files to ignore
 ansible/inventory
