@@ -54,6 +54,63 @@
         name: docker
         state: started
         enabled: yes
+#SonarQube Docker Container---------------------------------------------------------            
+- name: Configure SonarQube Server
+  hosts: sonarqube
+  become: yes
+  vars_files:
+    - secrets.yml
+  tasks:
+    - name: Create Sonarqube data directories with correct permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      loop:
+        - /home/ubuntu/sonar_data
+    - name: Copy docker-compose.yml to SonarQube host
+      copy:
+        src: ./docker-compose.yml
+        dest: /home/ubuntu/docker-compose.yml
+    - name: Run SonarQube with Docker Compose
+      shell: docker compose -f /home/ubuntu/docker-compose.yml up -d
+    - name: Wait for SonarQube to be ready (this can take 2-3 minutes)
+      uri:
+        url: http://localhost:9000/api/system/status
+        method: GET
+      register: _result
+      until: "_result.status == 200 and _result.json.status == 'UP'"
+      retries: 30
+      delay: 10
+    - name: Change default admin password
+      uri:
+        url: http://localhost:9000/api/users/change_password
+        method: POST
+        user: admin
+        password: admin
+        force_basic_auth: yes
+        body_format: form-urlencoded
+        body:
+          login: admin
+          previousPassword: admin
+          password: "{{sonarqube_admin_password}}"
+        status_code: 204
+      ignore_errors: yes #ignores admin password reset error
+    - name: Generate SonarQube Analysis Token
+      uri:
+        url: "http://localhost:9000/api/user_tokens/generate?name=jenkins-token"
+        method: POST
+        user: admin
+        password: "{{sonarqube_admin_password}}"
+        force_basic_auth: yes
+        status_code: 200
+      register: sonarqube_token_response
+      ignore_errors: yes
+    - name: Print the SonarQube Token
+      debug:
+        msg: "The new token is: {{ sonarqube_token_response.json.token }}"
 #Jenkins native installation--------------------------------------------------        
 - name: Configure Jenkins Server
   hosts: jenkins
@@ -110,8 +167,7 @@
 
            // 1. Create the Admin User
            def hudsonRealm = new HudsonPrivateSecurityRealm(false)
-           hudsonRealm.createAccount("admin", '{{jenkins_admin_password}}')
-           instance.setSecurityRealm(hudsonRealm)
+           hudsonRealm.createAccount("admin", new String(java.util.Base64.getDecoder().decode("{{ jenkins_admin_password | b64encode }}")))
 
            def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
            instance.setAuthorizationStrategy(strategy)
@@ -172,6 +228,15 @@
       copy:
         dest: "/var/lib/jenkins/jenkins.yaml"
         content: |
+          credentials:
+            system:
+              domainCredentials:
+                - credentials:
+                    - string:
+                        scope: GLOBAL
+                        id: "sonar-token"
+                        description: "SonarQube Analysis Token"
+                        secret: "{{ hostvars[groups['sonarqube'][0]]['sonarqube_token_response'].json.token }}"
           unclassified:
             mailer:
               smtpHost: "smtp.gmail.com"
@@ -180,64 +245,13 @@
               authentication:
                 username: "jasonantonacci2@gmail.com"
                 password: "{{ email_app_password }}"
+            sonarGlobalConfiguration:
+              buildWrapperEnabled: true
+              installations:
+                - name: "sonarqube"
+                  serverUrl: "http://{{ groups['sonarqube'][0] }}:9000"
+                  credentialsId: "sonar-token"
         owner: jenkins
         group: jenkins
-    - name: Safe restart Jenkins to load plugins
+    - name: Safe restart Jenkins to load plugins and JCasC
       shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:'{{jenkins_admin_password}}' safe-restart
-#SonarQube Docker Container---------------------------------------------------------            
-- name: Configure SonarQube Server
-  hosts: sonarqube
-  become: yes
-  vars_files:
-    - secrets.yml
-  tasks:
-    - name: Create Sonarqube data directories with correct permissions
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
-      loop:
-        - /home/ubuntu/sonar_data
-    - name: Copy docker-compose.yml to SonarQube host
-      copy:
-        src: ./docker-compose.yml
-        dest: /home/ubuntu/docker-compose.yml
-    - name: Run SonarQube with Docker Compose
-      shell: docker compose -f /home/ubuntu/docker-compose.yml up -d
-    - name: Wait for SonarQube to be ready (this can take 2-3 minutes)
-      uri:
-        url: http://localhost:9000/api/system/status
-        method: GET
-      register: _result
-      until: "_result.status == 200 and _result.json.status == 'UP'"
-      retries: 30
-      delay: 10
-    - name: Change default admin password
-      uri:
-        url: http://localhost:9000/api/users/change_password
-        method: POST
-        user: admin
-        password: admin
-        force_basic_auth: yes
-        body_format: form-urlencoded
-        body:
-          login: admin
-          previousPassword: admin
-          password: "{{sonarqube_admin_password}}"
-        status_code: 204
-      ignore_errors: yes #ignores admin password reset error
-    - name: Generate SonarQube Analysis Token
-      uri:
-        url: "http://localhost:9000/api/user_tokens/generate?name=jenkins-token"
-        method: POST
-        user: admin
-        password: "{{sonarqube_admin_password}}"
-        force_basic_auth: yes
-        status_code: 200
-      register: sonarqube_token_response
-      ignore_errors: yes
-    - name: Print the SonarQube Token
-      debug:
-        msg: "The new token is: {{ sonarqube_token_response.json.token }}"
