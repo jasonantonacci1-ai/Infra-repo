@@ -111,6 +111,18 @@
     - name: Print the SonarQube Token
       debug:
         msg: "The new token is: {{ sonarqube_token_response.json.token }}"
+    - name: Create Jenkins Webhook in SonarQube
+      uri:
+        url: "http://localhost:9000/api/webhooks/create"
+        method: POST
+        user: "admin"
+        password: "{{ sonarqube_admin_password }}" 
+        force_basic_auth: yes
+        status_code: 200, 400 # 400 allows it to pass if the webhook already exists
+        body_format: form-urlencoded
+        body:
+          name: "Jenkins"
+          url: "http://{{ groups['jenkins'][0] }}:8080/sonarqube-webhook/"
 #Jenkins native installation--------------------------------------------------        
 - name: Configure Jenkins Server
   hosts: jenkins
