@@ -249,6 +249,12 @@
                         id: "sonar-token"
                         description: "SonarQube Analysis Token"
                         secret: "{{ hostvars[groups['sonarqube'][0]]['sonarqube_token_response'].json.token }}"
+                    - usernamePassword:
+                        scope: GLOBAL
+                        id: "docker-credentials"
+                        description: "Docker Hub Login"
+                        username: "{{ docker_username }}"
+                        password: "{{ docker_password }}"
           unclassified:
             mailer:
               smtpHost: "smtp.gmail.com"
