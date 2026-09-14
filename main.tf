@@ -90,7 +90,8 @@ resource "local_file" "jenkins_tunnel" {
     command = "chmod +x ${path.module}/ansible/connect-jenkins.sh"
   }
 }
-#password generation ---------------------------------------------------------
+#password generation -/ fetching  ------------------------------------
+
          #ansible password generation (jenkins)
 resource "random_password" "jenkins_pass" {
   length           = 16
@@ -106,7 +107,7 @@ resource "random_password" "sonarqube_pass" {
 
 resource "local_file" "ansible_secrets" {
   filename = "${path.module}/ansible/secrets.yml"
-  content  = "sonarqube_admin_password: \"${random_password.sonarqube_pass.result}\"\njenkins_admin_password: \"${random_password.jenkins_pass.result}\"\nemail_app_password: \"${var.email_app_password}\""
+  content  = "sonarqube_admin_password: \"${random_password.sonarqube_pass.result}\"\njenkins_admin_password: \"${random_password.jenkins_pass.result}\"\nemail_app_password: \"${var.email_app_password}\"\ndocker_username: \"${var.docker_username}\"\ndocker_password: \"${var.docker_password}\""
 }
 
 resource "null_resource" "encrypt_secrets" {
@@ -115,6 +116,7 @@ resource "null_resource" "encrypt_secrets" {
     command = "echo '${random_password.sonarqube_pass.result}' > vault_pass.txt && ansible-vault encrypt ansible/secrets.yml --vault-password-file vault_pass.txt"
   }
 }
+
 #Subnet ID's / tags --------------------------------------------------
 
 resource "aws_subnet" "public_subnet_1" {

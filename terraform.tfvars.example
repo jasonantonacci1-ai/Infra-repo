@@ -1,2 +1,6 @@
-# Rename this file to terraform.tfvars and enter your own credentials before running
 email_app_password = "ENTER_YOUR_16_DIGIT_APP_PASSWORD_HERE"
+docker_username = "Your Username for docker"
+docker_password = "your password / PAT for docker"
+
+# Rename this file to terraform.tfvars and enter your own credentials before running
+
