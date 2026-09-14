@@ -21,7 +21,7 @@
           - curl
           - software-properties-common
           - fontconfig
-          - openjdk-17-jre
+          - openjdk-21-jre
           - unzip
         state: present
     - name: Add Docker GPG apt Key
@@ -54,108 +54,6 @@
         name: docker
         state: started
         enabled: yes
-#Jenkins --------------------------------------------------        
-- name: Configure Jenkins Server
-  hosts: jenkins
-  become: yes
-  vars_files:
-    - secrets.yml
-  tasks:
-    - name: Download Jenkins GPG key
-      get_url:
-        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
-        dest: /usr/share/keyrings/jenkins-keyring.asc
-        mode: '0644'
-    - name: Add Jenkins Repository
-      apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
-        state: present
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-    - name: Install Jenkins
-      apt:
-        name: jenkins
-        state: present
-    - name: Add Jenkins to docker group
-      user:
-        name: jenkins
-        groups: docker
-        append: yes
-    - name: Start and enable Jenkins
-      service:
-        name: jenkins
-        state: started
-        enabled: yes
-    - name: Create Jenkins data directories with correct permissions
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: jenkins
-        group: jenkins
-        mode: "0755"
-      loop:
-        - /var/lib/jenkins
-        - /var/lib/jenkins/init.groovy.d/
-    - name: Create Jenkins Admin User Script
-      ansible.builtin.copy:
-        dest: /var/lib/jenkins/init.groovy.d/basic-security.groovy
-        content: |
-           import jenkins.model.*
-           import hudson.security.*
-           import jenkins.install.InstallState
-           import jenkins.model.JenkinsLocationConfiguration
-
-           def instance = Jenkins.getInstance()
-
-           // 1. Create the Admin User
-           def hudsonRealm = new HudsonPrivateSecurityRealm(false)
-           hudsonRealm.createAccount("admin", "{{jenkins_admin_password}}")
-           instance.setSecurityRealm(hudsonRealm)
-
-           def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
-           instance.setAuthorizationStrategy(strategy)
-
-           // 2. Set the Jenkins URL so CLI works
-           def locationConfig = JenkinsLocationConfiguration.get()
-           locationConfig.setUrl("http://localhost:8080/")
-           locationConfig.save()
-
-           // 3. Bypass Setup Wizard
-           instance.setInstallState(InstallState.INITIAL_SETUP_COMPLETED)
-           instance.save()
-        owner: jenkins
-        group: jenkins
-        mode: "0644"
-    - name: Install Sonar Scanner
-      unarchive:
-        src: "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip"
-        dest: "/opt/"
-        remote_src: yes
-        owner: jenkins
-        group: jenkins
-    - name: Restart Jenkins to apply init scripts
-      service:
-        name: jenkins
-        state: restarted
-    - name: Wait for Jenkins to come back online
-      uri:
-        url: http://localhost:8080/login
-        method: GET
-      register: _result
-      until: "_result.status == 200"
-      retries: 30
-      delay: 5
-    - name: FETCH Jenkins CLI tool
-      get_url:
-        url: http://localhost:8080/jnlpJars/jenkins-cli.jar
-        dest: /opt/jenkins-cli.jar
-        mode: '0644'
-
-    - name: Install Jenkins Plugins via CLI
-      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:"{{jenkins_admin_password}}" install-plugin git workflow-aggregator sonar
-    - name: Safe restart Jenkins to load plugins
-      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:"{{jenkins_admin_password}}" safe-restart
 #SonarQube Docker Container---------------------------------------------------------            
 - name: Configure SonarQube Server
   hosts: sonarqube
@@ -213,3 +111,165 @@
     - name: Print the SonarQube Token
       debug:
         msg: "The new token is: {{ sonarqube_token_response.json.token }}"
+    - name: Create Jenkins Webhook in SonarQube
+      uri:
+        url: "http://localhost:9000/api/webhooks/create"
+        method: POST
+        user: "admin"
+        password: "{{ sonarqube_admin_password }}" 
+        force_basic_auth: yes
+        status_code: 200, 400 # 400 allows it to pass if the webhook already exists
+        body_format: form-urlencoded
+        body:
+          name: "Jenkins"
+          url: "http://{{ groups['jenkins'][0] }}:8080/sonarqube-webhook/"
+#Jenkins native installation--------------------------------------------------        
+- name: Configure Jenkins Server
+  hosts: jenkins
+  become: yes
+  vars_files:
+    - secrets.yml
+  tasks:
+    - name: Download Jenkins GPG key
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+        mode: '0644'
+    - name: Add Jenkins Repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+    - name: Add Jenkins to docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+    - name: Start and enable Jenkins
+      service:
+        name: jenkins
+        state: started
+        enabled: yes
+    - name: Create Jenkins data directories with correct permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: "0755"
+      loop:
+        - /var/lib/jenkins
+        - /var/lib/jenkins/init.groovy.d/
+    - name: Create Jenkins Admin User Script
+      ansible.builtin.copy:
+        dest: /var/lib/jenkins/init.groovy.d/basic-security.groovy
+        content: |
+           import jenkins.model.*
+           import hudson.security.*
+           import jenkins.install.InstallState
+           import jenkins.model.JenkinsLocationConfiguration
+
+           def instance = Jenkins.getInstance()
+
+           // 1. Create the Admin User
+           def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+           hudsonRealm.createAccount("admin", new String(java.util.Base64.getDecoder().decode("{{ jenkins_admin_password | b64encode }}")))
+
+           def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+           instance.setAuthorizationStrategy(strategy)
+
+           // 2. Set the Jenkins URL so CLI works
+           def locationConfig = JenkinsLocationConfiguration.get()
+           locationConfig.setUrl("http://localhost:8080/")
+           locationConfig.save()
+
+           // 3. Bypass Setup Wizard
+           instance.setInstallState(InstallState.INITIAL_SETUP_COMPLETED)
+           instance.save()
+        owner: jenkins
+        group: jenkins
+        mode: "0644"
+    - name: Install Sonar Scanner
+      unarchive:
+        src: "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip"
+        dest: "/opt/"
+        remote_src: yes
+        owner: jenkins
+        group: jenkins
+    - name: Download Trivy GPG key
+      get_url:
+        url: https://aquasecurity.github.io/trivy-repo/deb/public.key
+        dest: /usr/share/keyrings/trivy.asc
+        mode: '0644'
+    - name: Add Trivy Repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/trivy.asc] https://aquasecurity.github.io/trivy-repo/deb {{ ansible_lsb.codename }} main"
+        state: present
+    - name: Install Trivy
+      apt:
+        name: trivy
+        state: present
+        update_cache: yes
+    - name: Restart Jenkins to apply init scripts
+      service:
+        name: jenkins
+        state: restarted
+    - name: Wait for Jenkins to come back online
+      uri:
+        url: http://localhost:8080/login
+        method: GET
+      register: _result
+      until: "_result.status == 200"
+      retries: 30
+      delay: 5
+    - name: FETCH Jenkins CLI tool
+      get_url:
+        url: http://localhost:8080/jnlpJars/jenkins-cli.jar
+        dest: /opt/jenkins-cli.jar
+        mode: '0644'
+
+    - name: Install Jenkins Plugins via CLI
+      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:'{{jenkins_admin_password}}' install-plugin git workflow-aggregator sonar configuration-as-code mailer
+    - name: Create JCasC configuration file
+      copy:
+        dest: "/var/lib/jenkins/jenkins.yaml"
+        content: |
+          credentials:
+            system:
+              domainCredentials:
+                - credentials:
+                    - string:
+                        scope: GLOBAL
+                        id: "sonar-token"
+                        description: "SonarQube Analysis Token"
+                        secret: "{{ hostvars[groups['sonarqube'][0]]['sonarqube_token_response'].json.token }}"
+                    - usernamePassword:
+                        scope: GLOBAL
+                        id: "docker-credentials"
+                        description: "Docker Hub Login"
+                        username: "{{ docker_username }}"
+                        password: "{{ docker_password }}"
+          unclassified:
+            mailer:
+              smtpHost: "smtp.gmail.com"
+              smtpPort: "465"
+              useSsl: true
+              authentication:
+                username: "jasonantonacci2@gmail.com"
+                password: "{{ email_app_password }}"
+            sonarGlobalConfiguration:
+              buildWrapperEnabled: true
+              installations:
+                - name: "sonarqube"
+                  serverUrl: "http://{{ groups['sonarqube'][0] }}:9000"
+                  credentialsId: "sonar-token"
+        owner: jenkins
+        group: jenkins
+    - name: Safe restart Jenkins to load plugins and JCasC
+      shell: java -jar /opt/jenkins-cli.jar -s http://localhost:8080/ -auth admin:'{{jenkins_admin_password}}' safe-restart
