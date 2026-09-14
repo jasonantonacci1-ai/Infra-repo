@@ -6,25 +6,17 @@ pipeline {
                 checkout scm
             }
         }
-    }
-    agent any
-    stages {
         stage('terraform') {
             steps {
-                // commands go here
+                sh 'terraform init'
+                sh 'terraform apply -auto-approve'
             }
         }
-    }
-    agent any
-    stages {
         stage('ansible') {
             steps {
                 // commands go here
             }
         }
-    }
-    agent any
-    stages {
         stage('Name of Stage') {
             steps {
                 // commands go here
@@ -38,3 +30,4 @@ post {
             sh 'terraform destroy -auto-approve'
         }
     }
+ }
